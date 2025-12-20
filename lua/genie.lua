@@ -15,23 +15,27 @@ end
 function Genie:generate_snippet()
 	-- local prompt_context = self:get_context()
 	local curl = require("plenary.curl")
+	local lang = vim.api.nvim_get_option_value("filetype", {})
+	local prompt_code = table.concat(self:get_context(), "\n")
+	vim.print(prompt_code)
+	local parser = vim.treesitter.get_string_parser(prompt_code, lang)
+	local tree = parser:parse(true)[1]
+
+	local query = vim.treesitter.query.parse(
+		lang,
+		[[
+            (comment)@comment
+        ]]
+	)
+
+	for id, node, metadata in query:iter_captures(tree:root(), prompt_code) do
+		-- Print the node name and source text.
+		vim.print({ node:type(), vim.treesitter.get_node_text(node, prompt_code) })
+	end
+
 	local prompt = {
 		model = "codegemma:2b",
-		prompt = [[
-            <|fim_prefix|>
-            def sq_num(x):
-            """
-                Returns the square of a number.
-
-                Parameters:
-                n (int): A number to be squared.
-
-                Returns:
-                int: The square of n.
-            """
-            <|fim_suffix|>
-            <|fim_middle|>
-        ]],
+		prompt = parser:parse(),
 		stream = false,
 	}
 	local result = curl.post(self.config.URL, { body = vim.json.encode(prompt) })
